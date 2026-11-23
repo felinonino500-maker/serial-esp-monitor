@@ -1,6 +1,21 @@
 {
   "schemaVersion": 1,
   "enabled": false,
-  "description": "Daftarkan paket firmware di array firmwares. Jangan aktifkan sampai binary, alamat flash, dan target board diverifikasi.",
-  "firmwares": []
+  "description": "Paket mock untuk uji pemuatan manifest dan UI saja. Bukan firmware ESP dan tidak boleh di-flash.",
+  "firmwares": [
+    {
+      "id": "mock-test-only",
+      "name": "Contoh BIN (mock, bukan untuk flash)",
+      "target": "MOCK / bukan ESP32 atau ESP8266",
+      "description": "File uji 512 byte dengan data tiruan; tidak memiliki firmware maupun alamat flash yang valid.",
+      "enabled": false,
+      "files": [
+        {
+          "path": "examples/mock-test.bin",
+          "offset": null,
+          "sizeBytes": 512
+        }
+      ]
+    }
+  ]
 }
