@@ -90,7 +90,16 @@
             <select id="lineEnding" v-model="lineEnding" class="mb-4 w-full rounded-lg border border-line bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-300/60"><option value="\r\n">CRLF (\r\n)</option><option value="\n">LF (\n)</option><option value="">Tanpa akhiran</option></select>
             <label class="flex cursor-pointer items-center justify-between gap-3 py-1"><span><span class="block text-xs font-medium text-slate-300">Auto-scroll</span><span class="mt-0.5 block text-[10px] text-slate-600">Ikuti data terbaru</span></span><input v-model="autoScroll" type="checkbox" class="peer sr-only"><span class="relative h-5 w-9 rounded-full bg-slate-700 transition peer-checked:bg-cyan-400/70 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-300/50 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-300 after:transition after:content-[''] peer-checked:after:translate-x-4 peer-checked:after:bg-white"></span></label>
             <div class="my-4 h-px bg-line"></div>
-            <div class="flex items-center justify-between text-xs"><span class="text-slate-500">Baris log</span><span class="font-mono text-slate-300">{{ logs.length }}</span></div>
+            <div class="mb-3 flex items-center justify-between text-xs"><span class="text-slate-500">Baris log</span><span class="font-mono text-slate-300">{{ logs.length }}</span></div>
+            <div class="rounded-lg border border-line bg-[#0d141e] p-3">
+              <div class="mb-2 flex items-center justify-between"><span class="text-xs font-medium text-slate-300">Simpan riwayat otomatis</span><span :class="fileHandle ? 'text-emerald-300' : 'text-cyan-300'" class="text-[10px]">{{ fileHandle ? 'FILE AKTIF' : 'BROWSER AKTIF' }}</span></div>
+              <p class="mb-3 text-[10px] leading-4 text-slate-600">Log tersimpan di browser. Pilih file untuk menulis pembaruan otomatis ke perangkat Anda.</p>
+              <label for="historyFormat" class="mb-1.5 block text-[10px] text-slate-500">Format file</label>
+              <select id="historyFormat" v-model="historyFormat" class="mb-2.5 w-full rounded-md border border-line bg-panel px-2.5 py-2 text-xs text-slate-300 outline-none focus:border-cyan-300/60"><option value="csv">CSV</option><option value="txt">Teks (.txt)</option></select>
+              <button @click="chooseHistoryFile" class="w-full rounded-md border border-cyan-300/20 bg-cyan-300/[.06] px-3 py-2 text-xs font-medium text-cyan-200 hover:border-cyan-300/40 hover:bg-cyan-300/[.1]">{{ fileHandle ? 'Ganti file tujuan' : 'Pilih file untuk autosimpan' }}</button>
+              <button @click="downloadHistory" :disabled="logs.length === 0" class="mt-2 w-full rounded-md border border-line px-3 py-2 text-xs text-slate-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Unduh {{ historyFormat.toUpperCase() }} sekarang</button>
+              <p v-if="fileStatus" class="mt-2 text-[10px] leading-4 text-slate-500" role="status">{{ fileStatus }}</p>
+            </div>
           </section>
           <div class="flex items-start gap-2.5 px-1 text-[11px] leading-5 text-slate-600"><svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-300/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 1.75a.75.75 0 0 1 .75.75v.54a7 7 0 0 1 5.96 5.96h.54a.75.75 0 0 1 0 1.5h-.54a7 7 0 0 1-5.96 5.96v.54a.75.75 0 0 1-1.5 0v-.54a7 7 0 0 1-5.96-5.96h-.54a.75.75 0 0 1 0-1.5h.54a7 7 0 0 1 5.96-5.96V2.5a.75.75 0 0 1 .75-.75ZM10 6a.75.75 0 0 1 .75.75v2.94l1.78 1.78a.75.75 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 9.25 10V6.75A.75.75 0 0 1 10 6Z" clip-rule="evenodd"/></svg><p>Pastikan driver USB-to-serial board sudah terpasang. Baud rate harus sesuai dengan firmware.</p></div>
         </aside>
@@ -133,11 +142,15 @@
     const { createApp, nextTick } = Vue;
     createApp({
       data() {
+        let storedLogs = [];
+        try { storedLogs = JSON.parse(localStorage.getItem('serial-esp-history') || '[]'); if (!Array.isArray(storedLogs)) storedLogs = []; } catch (_) { storedLogs = []; }
+        storedLogs = storedLogs.slice(-3000).map((entry, index) => ({ ...entry, id: Number(entry.id) || index + 1 }));
         return {
           serialSupported: typeof navigator !== 'undefined' && 'serial' in navigator,
           connected: false, connecting: false, sending: false, port: null, reader: null, writer: null,
           board: 'ESP32', baudRate: 115200, baudRates: [9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600],
-          lineEnding: '\r\n', autoScroll: true, message: '', logs: [], notice: '', clock: '', logId: 0
+          lineEnding: '\r\n', autoScroll: true, message: '', logs: storedLogs, notice: '', clock: '', logId: storedLogs.reduce((max, entry) => Math.max(max, entry.id), 0),
+          historyFormat: 'csv', fileHandle: null, fileStatus: '', fileSyncTimer: null
         };
       },
       computed: {
@@ -164,7 +177,65 @@
         addLog(kind, text) {
           this.logs.push({ id: ++this.logId, kind, text: String(text), time: this.timestamp() });
           if (this.logs.length > 3000) this.logs.splice(0, this.logs.length - 3000);
+          this.persistHistory();
           if (this.autoScroll) nextTick(() => { const el = this.$refs.logViewport; if (el) el.scrollTop = el.scrollHeight; });
+        },
+        persistHistory() {
+          try { localStorage.setItem('serial-esp-history', JSON.stringify(this.logs)); }
+          catch (_) { this.fileStatus = 'Penyimpanan browser penuh; unduh log agar tidak hilang.'; }
+          if (this.fileHandle) {
+            window.clearTimeout(this.fileSyncTimer);
+            this.fileSyncTimer = window.setTimeout(() => this.syncHistoryFile(), 700);
+          }
+        },
+        historyContents() {
+          if (this.historyFormat === 'csv') {
+            const quote = (value) => `"${String(value).replace(/"/g, '""')}"`;
+            return ['waktu,arah,pesan', ...this.logs.map((entry) => [entry.time, entry.kind === 'rx' ? 'RX' : entry.kind === 'tx' ? 'TX' : 'INFO', entry.text].map(quote).join(','))].join('\r\n');
+          }
+          return this.logs.map((entry) => `[${entry.time}] ${entry.kind === 'rx' ? 'RX' : entry.kind === 'tx' ? 'TX' : 'INFO'} ${entry.text}`).join('\n');
+        },
+        async chooseHistoryFile() {
+          if (!window.showSaveFilePicker) {
+            this.fileStatus = 'Browser ini belum mendukung autosimpan ke file. Riwayat tetap tersimpan di browser; gunakan tombol Unduh.';
+            return;
+          }
+          try {
+            const extension = this.historyFormat;
+            const handle = await window.showSaveFilePicker({
+              suggestedName: `serial-esp-log.${extension}`,
+              types: [{ description: extension === 'csv' ? 'File CSV' : 'File teks', accept: { [extension === 'csv' ? 'text/csv' : 'text/plain']: [`.${extension}`] } }]
+            });
+            this.fileHandle = handle;
+            await this.syncHistoryFile();
+            this.fileStatus = `Autosimpan aktif: ${handle.name}`;
+          } catch (error) {
+            if (error.name !== 'AbortError') this.fileStatus = `Tidak dapat memilih file: ${error.message || 'akses ditolak'}`;
+          }
+        },
+        async syncHistoryFile() {
+          if (!this.fileHandle) return;
+          try {
+            let permission = await this.fileHandle.queryPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') permission = await this.fileHandle.requestPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') { this.fileStatus = 'Izin file tidak tersedia. Pilih ulang file untuk melanjutkan autosimpan.'; this.fileHandle = null; return; }
+            const writable = await this.fileHandle.createWritable();
+            await writable.write(this.historyContents());
+            await writable.close();
+            this.fileStatus = `Tersimpan otomatis · ${this.logs.length} baris · ${this.fileHandle.name}`;
+          } catch (error) {
+            this.fileStatus = `Gagal menyimpan file: ${error.message || 'coba pilih ulang file'}`;
+            this.fileHandle = null;
+          }
+        },
+        downloadHistory() {
+          if (!this.logs.length) return;
+          const mime = this.historyFormat === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8';
+          const blob = new Blob([this.historyContents()], { type: mime });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url; link.download = `serial-esp-log-${new Date().toISOString().replace(/[:.]/g, '-')}.${this.historyFormat}`;
+          document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
         },
         async connect() {
           if (!this.serialSupported || this.connecting) return;
@@ -240,7 +311,7 @@
             this.addLog('system', 'Perangkat USB terputus.');
           }
         },
-        clearLogs() { this.logs = []; },
+        clearLogs() { this.logs = []; this.persistHistory(); },
         describeError(error, fallback) {
           if (!error) return fallback;
           if (error.name === 'SecurityError') return 'Akses serial diblokir. Buka situs melalui HTTPS atau localhost di Chrome/Edge desktop.';
