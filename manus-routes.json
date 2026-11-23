@@ -1,1 +1,1 @@
-{"routes":[{"path":"/","title":"Serial Monitor ESP"}]}
+{"routes":[{"path":"/","title":"Serial Monitor ESP"},{"path":"/upload.html","title":"Upload Firmware ESP"}]}

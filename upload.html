@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08131b">
+  <title>Upload Firmware · Serial ESP</title>
+  <style>
+    :root{color-scheme:dark;--bg:#08131b;--panel:#101f29;--panel2:#132732;--line:#29414d;--text:#e8f3f7;--muted:#91a8b3;--cyan:#49d7e9;--green:#79e0a0;--amber:#f1c575}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% -10%,#123744 0,transparent 40%),var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+    .shell{max-width:1000px;margin:0 auto;padding:32px 22px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:52px}.brand{font-weight:750;letter-spacing:.04em}.brand span{color:var(--cyan)}a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}.back{font-size:.9rem;color:var(--muted)}
+    .eyebrow{font:700 .74rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan)}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.07;letter-spacing:-.045em;margin:12px 0 14px}.intro{color:var(--muted);max-width:650px;margin:0 0 30px}
+    .notice{display:flex;gap:13px;padding:17px 18px;border:1px solid #715c36;background:#2d281d;border-radius:12px;color:#f4dfb6;margin-bottom:24px}.notice strong{display:block;color:#ffe3a2;margin-bottom:3px}.icon{font-size:1.1rem;line-height:1.5}
+    .panel{background:linear-gradient(145deg,rgba(19,39,50,.95),rgba(13,27,36,.98));border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 18px 60px #0003}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding-bottom:17px;margin-bottom:20px}.panel h2{font-size:1.05rem;margin:0}.tag{font:700 .7rem ui-monospace,monospace;letter-spacing:.08em;color:var(--amber);border:1px solid #715c36;border-radius:99px;padding:6px 10px}
+    label{display:block;font-size:.82rem;font-weight:650;margin-bottom:8px}select{width:100%;padding:13px 14px;border-radius:9px;border:1px solid var(--line);background:#0b1820;color:#8aa0aa;font:inherit}select:disabled{opacity:.75}.hint{font-size:.82rem;color:var(--muted);margin:8px 0 22px}.actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.button{border:0;border-radius:9px;padding:12px 17px;background:#1f4852;color:#91b8bf;font:700 .9rem system-ui;cursor:not-allowed}.small{font-size:.78rem;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}.stat{padding:14px;border:1px solid var(--line);border-radius:10px;background:#0b1820}.stat b{display:block;font-size:.75rem;color:var(--muted);font-weight:600;margin-bottom:6px}.stat span{font: .84rem ui-monospace,SFMono-Regular,Menlo,monospace;color:#c8d9de}
+    .foot{display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--line);padding-top:18px;margin-top:22px;color:var(--muted);font-size:.78rem}.empty{color:var(--muted);font-size:.9rem;padding:14px 0 0}code{color:#c7e7eb;background:#142b34;padding:2px 5px;border-radius:4px}
+    @media(max-width:650px){.shell{padding:22px 16px 40px}.top{margin-bottom:38px}.panel{padding:18px}.grid{grid-template-columns:1fr}.foot{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="top" aria-label="Navigasi utama"><div class="brand">SERIAL<span>ESP</span> <span style="color:#91a8b3;font-weight:500">/ FIRMWARE</span></div><a class="back" href="./index.html">← Kembali ke Serial Monitor</a></nav>
+    <header><div class="eyebrow">Utilitas perangkat · ESP32 / ESP8266</div><h1>Upload firmware</h1><p class="intro">Kerangka halaman untuk memilih paket firmware dari folder proyek dan mengirimkannya ke perangkat ESP.</p></header>
+    <aside class="notice" role="status"><div class="icon" aria-hidden="true">!</div><div><strong>Fitur belum diaktifkan</strong><span id="noticeText">Belum ada paket firmware terdaftar. Pemilihan perangkat dan proses flash belum tersedia.</span></div></aside>
+    <section class="panel" aria-labelledby="chooseTitle">
+      <div class="panel-head"><h2 id="chooseTitle">Pilih paket firmware</h2><span class="tag">KERANGKA / NONAKTIF</span></div>
+      <label for="firmwareChoice">Paket yang tersedia</label>
+      <select id="firmwareChoice" disabled aria-describedby="choiceHint"><option>Belum ada firmware di manifest</option></select>
+      <p class="hint" id="choiceHint">Daftar ini akan bersumber dari <code>firmware/manifest.json</code>. Tambahkan file binary beserta target chip dan alamat flash sebelum fitur dapat digunakan.</p>
+      <div class="actions"><button class="button" type="button" disabled>Hubungkan &amp; flash</button><span class="small">Tidak ada koneksi serial yang dibuka dan tidak ada data yang ditulis ke perangkat.</span></div>
+      <div class="grid" aria-label="Informasi paket"><div class="stat"><b>Target board</b><span id="targetValue">—</span></div><div class="stat"><b>Jumlah file binary</b><span id="fileCount">0</span></div><div class="stat"><b>Status manifest</b><span id="manifestState">MEMUAT</span></div></div>
+      <p class="empty" id="manifestMessage">Memeriksa manifest firmware…</p>
+      <div class="foot"><span>Web Serial memerlukan browser desktop yang kompatibel dan HTTPS atau localhost.</span><span>Belum diuji dengan perangkat fisik.</span></div>
+    </section>
+  </main>
+  <script>
+    (async function(){
+      const state=document.getElementById('manifestState');
+      const message=document.getElementById('manifestMessage');
+      try {
+        const response=await fetch('./firmware/manifest.json',{cache:'no-store'});
+        if(!response.ok) throw new Error('Manifest tidak dapat dimuat.');
+        const manifest=await response.json();
+        const packages=Array.isArray(manifest.firmwares)?manifest.firmwares:[];
+        const files=packages.reduce((sum,item)=>sum+(Array.isArray(item.files)?item.files.length:0),0);
+        document.getElementById('fileCount').textContent=String(files);
+        document.getElementById('targetValue').textContent=packages[0]?.target||'—';
+        state.textContent=packages.length?'TERDAFTAR · BELUM AKTIF':'KOSONG';
+        message.textContent=packages.length
+          ? 'Paket tercatat dalam manifest, tetapi pemilih dan proses flash tetap nonaktif sampai alur flashing diimplementasikan dan divalidasi.'
+          : 'Manifest berhasil dibaca; belum ada paket firmware yang terdaftar.';
+      } catch(error) {
+        state.textContent='TIDAK TERSEDIA';
+        message.textContent='Manifest belum dapat dibaca. Pastikan halaman disajikan melalui server web, bukan dibuka sebagai file lokal.';
+      }
+    })();
+  </script>
+</body>
+</html>

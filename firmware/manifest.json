@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "enabled": false,
+  "description": "Daftarkan paket firmware di array firmwares. Jangan aktifkan sampai binary, alamat flash, dan target board diverifikasi.",
+  "firmwares": []
+}
