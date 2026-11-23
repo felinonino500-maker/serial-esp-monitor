@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1018">
+  <meta name="description" content="Serial Monitor ESP32 dan ESP8266 di browser. Pantau dan kirim data serial langsung melalui Web Serial API.">
+  <title>Serial Monitor ESP — Konsol perangkat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['DM Mono', 'monospace'] }, colors: { ink: '#0b1018', panel: '#111925', line: '#202d3c', accent: '#53d8e8' } } }
+    };
+  </script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { scrollbar-width: thin; scrollbar-color: #344255 transparent; }
+    body { background-color: #0b1018; }
+    .terminal-grid { background-image: linear-gradient(rgba(83,216,232,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(83,216,232,.018) 1px, transparent 1px); background-size: 28px 28px; }
+    .status-glow { box-shadow: 0 0 0 4px rgba(83,216,232,.09), 0 0 16px rgba(83,216,232,.28); }
+    button, input, select { transition: border-color .15s ease, background-color .15s ease, color .15s ease, box-shadow .15s ease; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body class="min-h-screen font-sans text-slate-200 antialiased selection:bg-cyan-300/20">
+  <div id="app" class="min-h-screen">
+    <header class="border-b border-line bg-[#0d141e]">
+      <div class="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div class="flex items-center gap-3">
+          <div class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[.08]" aria-hidden="true">
+            <svg class="h-5 w-5 text-accent" viewBox="0 0 24 24" fill="none"><path d="M3 12h3l2.1-5 4.1 10 2.2-5H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="12" r="1" fill="currentColor"/><circle cx="21" cy="12" r="1" fill="currentColor"/></svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2"><h1 class="text-sm font-semibold tracking-wide text-white sm:text-base">SERIAL <span class="text-accent">ESP</span></h1><span class="hidden rounded border border-slate-700 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[.14em] text-slate-500 sm:inline">Web console</span></div>
+            <p class="mt-0.5 text-xs text-slate-500">Serial monitor untuk ESP32 &amp; ESP8266</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-full border border-line bg-panel px-3 py-2" role="status" aria-live="polite">
+          <span :class="connected ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.65)]' : 'bg-slate-600'" class="h-2 w-2 rounded-full"></span>
+          <span class="text-xs font-medium text-slate-300">{{ connected ? 'Terhubung' : 'Tidak terhubung' }}</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+      <div class="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div>
+          <p class="mb-1.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[.18em] text-cyan-300/70"><span class="h-px w-5 bg-cyan-300/50"></span> Perangkat keras / serial</p>
+          <h2 class="text-xl font-semibold tracking-tight text-white sm:text-2xl">Konsol perangkat</h2>
+          <p class="mt-1 text-sm text-slate-500">Baca output board dan kirim perintah dalam satu sesi.</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-500"><span class="font-mono text-slate-400">{{ clock }}</span><span class="text-slate-700">/</span><span>Web Serial API</span></div>
+      </div>
+
+      <div v-if="!serialSupported" class="mb-5 flex gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[.06] p-4 text-sm text-amber-100" role="alert">
+        <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.72-1.36 3.486 0l6.518 11.598c.75 1.336-.214 2.99-1.743 2.99H3.482c-1.53 0-2.493-1.654-1.743-2.99L8.257 3.1ZM11 14a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-1-2a1 1 0 0 0 1-1V8a1 1 0 1 0-2 0v3a1 1 0 0 0 1 1Z" clip-rule="evenodd"/></svg>
+        <div><p class="font-medium">Browser belum mendukung Web Serial.</p><p class="mt-1 text-xs leading-5 text-amber-100/70">Buka aplikasi ini menggunakan Chrome atau Edge versi desktop melalui HTTPS atau localhost. Akses serial tidak tersedia di sebagian besar browser seluler.</p></div>
+      </div>
+      <div v-if="notice" class="mb-5 flex items-start justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[.06] px-4 py-3 text-sm text-rose-200" role="alert"><span>{{ notice }}</span><button class="shrink-0 text-rose-200/60 hover:text-white" aria-label="Tutup pesan" @click="notice = ''">×</button></div>
+
+      <div class="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside class="space-y-4">
+          <section class="rounded-2xl border border-line bg-panel p-5 shadow-xl shadow-black/10">
+            <div class="mb-5 flex items-center justify-between"><h3 class="text-sm font-semibold text-white">Koneksi</h3><span class="rounded-md border border-line px-2 py-1 font-mono text-[10px] text-slate-500">01</span></div>
+            <label for="board" class="mb-2 block text-xs font-medium text-slate-400">Target board</label>
+            <select id="board" v-model="board" class="mb-4 w-full rounded-lg border border-line bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10">
+              <option>ESP32</option><option>ESP8266</option>
+            </select>
+            <label for="baud" class="mb-2 block text-xs font-medium text-slate-400">Baud rate</label>
+            <div class="relative mb-4"><select id="baud" v-model.number="baudRate" :disabled="connected" class="w-full appearance-none rounded-lg border border-line bg-[#0d141e] px-3 py-2.5 font-mono text-sm text-slate-200 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10 disabled:opacity-50"><option v-for="rate in baudRates" :key="rate" :value="rate">{{ rate.toLocaleString('id-ID') }} baud</option></select><svg class="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 7.47a.75.75 0 0 1 1.06 0L10 11.19l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></div>
+            <div class="mb-5 flex items-center justify-between rounded-lg border border-line/80 bg-[#0d141e]/70 px-3 py-2.5"><span class="text-xs text-slate-500">Port serial</span><span class="max-w-[145px] truncate font-mono text-[11px] text-slate-400" :title="portLabel">{{ portLabel }}</span></div>
+            <button v-if="!connected" @click="connect" :disabled="!serialSupported || connecting" class="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-[#071116] shadow-lg shadow-cyan-950/20 hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-200 focus:ring-offset-2 focus:ring-offset-panel disabled:cursor-not-allowed disabled:opacity-40">
+              <svg v-if="!connecting" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M11.5 2.75a.75.75 0 0 0-1.28-.53L4.69 7.75H3.5A1.75 1.75 0 0 0 1.75 9.5v1A1.75 1.75 0 0 0 3.5 12.25h1.19l5.53 5.53a.75.75 0 0 0 1.28-.53V2.75Z"/><path d="M14.22 6.28a.75.75 0 0 1 1.06 0 5.25 5.25 0 0 1 0 7.44.75.75 0 0 1-1.06-1.06 3.75 3.75 0 0 0 0-5.32.75.75 0 0 1 0-1.06Z"/></svg>
+              <svg v-else class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"/></svg>
+              {{ connecting ? 'Menghubungkan…' : 'Pilih port & hubungkan' }}
+            </button>
+            <button v-else @click="disconnect" class="flex w-full items-center justify-center gap-2 rounded-lg border border-rose-400/25 bg-rose-400/[.07] px-4 py-2.5 text-sm font-medium text-rose-300 hover:border-rose-400/40 hover:bg-rose-400/[.12] focus:outline-none focus:ring-2 focus:ring-rose-300/40">
+              <span class="h-2 w-2 rounded-[2px] bg-current"></span> Putuskan koneksi
+            </button>
+            <p class="mt-3 text-center text-[10px] leading-4 text-slate-600">Hubungkan board via USB, lalu izinkan akses port.</p>
+          </section>
+
+          <section class="rounded-2xl border border-line bg-panel p-5">
+            <div class="mb-4 flex items-center justify-between"><h3 class="text-sm font-semibold text-white">Opsi monitor</h3><span class="rounded-md border border-line px-2 py-1 font-mono text-[10px] text-slate-500">02</span></div>
+            <label for="lineEnding" class="mb-2 block text-xs font-medium text-slate-400">Akhiran baris saat kirim</label>
+            <select id="lineEnding" v-model="lineEnding" class="mb-4 w-full rounded-lg border border-line bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-300/60"><option value="\r\n">CRLF (\r\n)</option><option value="\n">LF (\n)</option><option value="">Tanpa akhiran</option></select>
+            <label class="flex cursor-pointer items-center justify-between gap-3 py-1"><span><span class="block text-xs font-medium text-slate-300">Auto-scroll</span><span class="mt-0.5 block text-[10px] text-slate-600">Ikuti data terbaru</span></span><input v-model="autoScroll" type="checkbox" class="peer sr-only"><span class="relative h-5 w-9 rounded-full bg-slate-700 transition peer-checked:bg-cyan-400/70 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-300/50 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-300 after:transition after:content-[''] peer-checked:after:translate-x-4 peer-checked:after:bg-white"></span></label>
+            <div class="my-4 h-px bg-line"></div>
+            <div class="flex items-center justify-between text-xs"><span class="text-slate-500">Baris log</span><span class="font-mono text-slate-300">{{ logs.length }}</span></div>
+          </section>
+          <div class="flex items-start gap-2.5 px-1 text-[11px] leading-5 text-slate-600"><svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-300/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 1.75a.75.75 0 0 1 .75.75v.54a7 7 0 0 1 5.96 5.96h.54a.75.75 0 0 1 0 1.5h-.54a7 7 0 0 1-5.96 5.96v.54a.75.75 0 0 1-1.5 0v-.54a7 7 0 0 1-5.96-5.96h-.54a.75.75 0 0 1 0-1.5h.54a7 7 0 0 1 5.96-5.96V2.5a.75.75 0 0 1 .75-.75ZM10 6a.75.75 0 0 1 .75.75v2.94l1.78 1.78a.75.75 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 9.25 10V6.75A.75.75 0 0 1 10 6Z" clip-rule="evenodd"/></svg><p>Pastikan driver USB-to-serial board sudah terpasang. Baud rate harus sesuai dengan firmware.</p></div>
+        </aside>
+
+        <section class="flex min-h-[600px] flex-col overflow-hidden rounded-2xl border border-line bg-[#0d141e] shadow-2xl shadow-black/20" aria-label="Monitor serial">
+          <div class="flex flex-col justify-between gap-3 border-b border-line px-4 py-3.5 sm:flex-row sm:items-center sm:px-5">
+            <div class="flex items-center gap-3"><div :class="connected ? 'status-glow bg-cyan-300' : 'bg-slate-700'" class="h-2.5 w-2.5 rounded-full transition-colors"></div><div><h3 class="text-sm font-semibold text-white">Serial monitor</h3><p class="mt-0.5 font-mono text-[10px] text-slate-500">{{ connected ? `${baudRate.toLocaleString('id-ID')} baud · 8-N-1` : 'Menunggu koneksi perangkat' }}</p></div></div>
+            <div class="flex items-center gap-2"><div class="hidden items-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[10px] text-slate-500 sm:flex"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>RX<span class="mx-1 text-slate-700">·</span><span class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>TX</div><button @click="clearLogs" :disabled="logs.length === 0" class="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Hapus semua log"><svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.5 2.75A1.75 1.75 0 0 0 6.75 4.5V5H4a.75.75 0 0 0 0 1.5h.56l.65 8.4a2.25 2.25 0 0 0 2.24 2.1h5.1a2.25 2.25 0 0 0 2.24-2.1l.65-8.4H16a.75.75 0 0 0 0-1.5h-2.75v-.5A1.75 1.75 0 0 0 11.5 2.75h-3Zm3.25 2.25v-.5a.25.25 0 0 0-.25-.25h-3a.25.25 0 0 0-.25.25V5h3.5Z" clip-rule="evenodd"/></svg>Hapus log</button></div>
+          </div>
+          <div ref="logViewport" class="terminal-grid relative min-h-[390px] flex-1 overflow-y-auto px-4 py-4 sm:px-5" aria-live="polite" aria-label="Output serial">
+            <div v-if="logs.length === 0" class="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+              <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-panel"><svg class="h-5 w-5 text-slate-600" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="19" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/></svg></div>
+              <p class="text-sm font-medium text-slate-400">Belum ada data serial</p><p class="mt-1.5 max-w-xs text-xs leading-5 text-slate-600">Hubungkan ESP32 atau ESP8266 untuk mulai menerima output. Data akan muncul di sini.</p>
+              <div class="mt-5 flex items-center gap-2 rounded-full border border-line/80 bg-[#0d141e]/80 px-3 py-1.5 text-[10px] text-slate-600"><span class="h-1.5 w-1.5 rounded-full bg-slate-600"></span>Port belum dipilih</div>
+            </div>
+            <div v-else class="space-y-1.5 font-mono text-[12px] leading-5 sm:text-[13px]">
+              <div v-for="entry in logs" :key="entry.id" class="group flex gap-3 rounded-md px-2 py-1 hover:bg-white/[.025]">
+                <span class="shrink-0 select-none text-[10px] leading-5 text-slate-600">{{ entry.time }}</span>
+                <span :class="entry.kind === 'tx' ? 'text-cyan-300' : entry.kind === 'system' ? 'text-slate-500 italic' : 'text-emerald-300/90'" class="w-7 shrink-0 select-none text-[10px] font-medium leading-5">{{ entry.kind === 'tx' ? 'TX →' : entry.kind === 'system' ? 'INFO' : 'RX ←' }}</span>
+                <span class="min-w-0 whitespace-pre-wrap break-all text-slate-300">{{ entry.text }}</span>
+              </div>
+              <div v-if="connected" class="ml-[7.1rem] mt-2 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-cyan-300/80" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="border-t border-line bg-[#101824] p-3.5 sm:p-4">
+            <form @submit.prevent="sendMessage" class="flex items-center gap-2 rounded-xl border border-line bg-[#0b1018] p-1.5 pl-3 focus-within:border-cyan-300/40 focus-within:ring-2 focus-within:ring-cyan-300/[.07]">
+              <span class="select-none font-mono text-sm text-cyan-300/70">&gt;_</span>
+              <input v-model="message" :disabled="!connected" type="text" autocomplete="off" spellcheck="false" placeholder="Ketik perintah serial…" aria-label="Perintah untuk dikirim ke perangkat" class="min-w-0 flex-1 bg-transparent py-2 text-sm text-slate-200 outline-none placeholder:text-slate-600 disabled:cursor-not-allowed">
+              <button type="submit" :disabled="!connected || !message.trim() || sending" class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-cyan-300 px-3.5 py-2 text-xs font-semibold text-[#071116] hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-35 sm:px-4"><svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2.94 2.94a.75.75 0 0 1 .8-.17l13.5 5.5a1.88 1.88 0 0 1 0 3.46l-13.5 5.5A.75.75 0 0 1 2.7 16.4l1.44-5.65a.75.75 0 0 1 .57-.55l5.17-1.04-5.17-1.04a.75.75 0 0 1-.57-.55L2.7 3.6a.75.75 0 0 1 .24-.66Z"/></svg><span class="hidden sm:inline">Kirim</span><span class="sm:hidden">TX</span></button>
+            </form>
+            <div class="mt-2 flex items-center justify-between px-1 text-[10px] text-slate-600"><span>Tekan <kbd class="rounded border border-slate-700 px-1 py-0.5 font-mono text-slate-500">Enter</kbd> untuk mengirim</span><span>{{ connected ? 'Kanal TX aktif' : 'Hubungkan port untuk mengirim' }}</span></div>
+          </div>
+        </section>
+      </div>
+      <footer class="mt-6 flex flex-col justify-between gap-2 border-t border-line/70 pt-4 text-[10px] text-slate-600 sm:flex-row sm:items-center"><span>Serial ESP <span class="mx-1 text-slate-700">·</span> Data serial berjalan langsung di browser Anda.</span><span>USB · UART · Web Serial API</span></footer>
+    </main>
+  </div>
+
+  <script>
+    const { createApp, nextTick } = Vue;
+    createApp({
+      data() {
+        return {
+          serialSupported: typeof navigator !== 'undefined' && 'serial' in navigator,
+          connected: false, connecting: false, sending: false, port: null, reader: null, writer: null,
+          board: 'ESP32', baudRate: 115200, baudRates: [9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600],
+          lineEnding: '\r\n', autoScroll: true, message: '', logs: [], notice: '', clock: '', logId: 0
+        };
+      },
+      computed: {
+        portLabel() {
+          if (!this.port) return 'Belum dipilih';
+          const info = this.port.getInfo ? this.port.getInfo() : {};
+          const vendor = info.usbVendorId ? `VID ${info.usbVendorId.toString(16).toUpperCase().padStart(4, '0')}` : 'USB serial';
+          const product = info.usbProductId ? ` · PID ${info.usbProductId.toString(16).toUpperCase().padStart(4, '0')}` : '';
+          return `${vendor}${product}`;
+        }
+      },
+      mounted() {
+        this.updateClock();
+        this.clockTimer = window.setInterval(this.updateClock, 1000);
+        if (this.serialSupported) navigator.serial.addEventListener('disconnect', this.handleDisconnect);
+      },
+      beforeUnmount() {
+        window.clearInterval(this.clockTimer);
+        if (this.serialSupported) navigator.serial.removeEventListener('disconnect', this.handleDisconnect);
+      },
+      methods: {
+        updateClock() { this.clock = new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()); },
+        timestamp() { return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()); },
+        addLog(kind, text) {
+          this.logs.push({ id: ++this.logId, kind, text: String(text), time: this.timestamp() });
+          if (this.logs.length > 3000) this.logs.splice(0, this.logs.length - 3000);
+          if (this.autoScroll) nextTick(() => { const el = this.$refs.logViewport; if (el) el.scrollTop = el.scrollHeight; });
+        },
+        async connect() {
+          if (!this.serialSupported || this.connecting) return;
+          this.notice = ''; this.connecting = true;
+          try {
+            const selectedPort = await navigator.serial.requestPort();
+            await selectedPort.open({ baudRate: this.baudRate, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
+            this.port = selectedPort;
+            this.connected = true;
+            this.addLog('system', `Port terbuka pada ${this.baudRate} baud · ${this.board}`);
+            this.readLoop(selectedPort);
+          } catch (error) {
+            if (error && error.name === 'NotFoundError') return;
+            this.notice = this.describeError(error, 'Tidak dapat membuka port serial. Pastikan port tidak sedang dipakai aplikasi lain.');
+            if (this.port) { try { await this.port.close(); } catch (_) {} }
+            this.port = null; this.connected = false;
+          } finally { this.connecting = false; }
+        },
+        async readLoop(selectedPort) {
+          const decoder = new TextDecoder();
+          try {
+            while (selectedPort.readable && this.connected) {
+              this.reader = selectedPort.readable.getReader();
+              try {
+                while (true) {
+                  const { value, done } = await this.reader.read();
+                  if (done) break;
+                  if (value) {
+                    const text = decoder.decode(value, { stream: true });
+                    if (text) this.addLog('rx', text);
+                  }
+                }
+              } finally {
+                if (this.reader) { try { this.reader.releaseLock(); } catch (_) {} this.reader = null; }
+              }
+            }
+          } catch (error) {
+            if (this.connected) {
+              this.notice = this.describeError(error, 'Pembacaan serial terhenti.');
+              this.addLog('system', 'Pembacaan serial terhenti.');
+            }
+          }
+        },
+        async sendMessage() {
+          if (!this.connected || !this.port || !this.message.trim() || this.sending) return;
+          const text = this.message;
+          this.sending = true;
+          try {
+            this.writer = this.port.writable.getWriter();
+            await this.writer.write(new TextEncoder().encode(text + this.lineEnding));
+            this.addLog('tx', text);
+            this.message = '';
+          } catch (error) {
+            this.notice = this.describeError(error, 'Perintah gagal dikirim.');
+          } finally {
+            if (this.writer) { try { this.writer.releaseLock(); } catch (_) {} this.writer = null; }
+            this.sending = false;
+          }
+        },
+        async disconnect() {
+          if (!this.port) return;
+          const oldPort = this.port;
+          this.connected = false;
+          try { if (this.reader) await this.reader.cancel(); } catch (_) {}
+          try { if (this.writer) await this.writer.close(); } catch (_) {}
+          try { await oldPort.close(); } catch (_) {}
+          this.reader = null; this.writer = null; this.port = null;
+          this.addLog('system', 'Koneksi serial diputus.');
+        },
+        async handleDisconnect(event) {
+          if (this.port && event.port === this.port) {
+            this.connected = false; this.port = null; this.reader = null; this.writer = null;
+            this.addLog('system', 'Perangkat USB terputus.');
+          }
+        },
+        clearLogs() { this.logs = []; },
+        describeError(error, fallback) {
+          if (!error) return fallback;
+          if (error.name === 'SecurityError') return 'Akses serial diblokir. Buka situs melalui HTTPS atau localhost di Chrome/Edge desktop.';
+          if (error.name === 'NetworkError') return 'Port gagal dibuka. Periksa kabel USB dan pastikan port tidak digunakan aplikasi lain.';
+          if (error.name === 'NotAllowedError') return 'Izin port ditolak atau dialog pemilihan port dibatalkan.';
+          return error.message || fallback;
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
